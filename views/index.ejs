@@ -1,65 +1,338 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Node.js Simple File Upload</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+      }
 
-<head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<meta http-equiv="X-UA-Compatible" content="ie=edge">
-	<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-	<title>Mongo File Upload</title>
-</head>
+      body {
+        color: #434a54;
+        font-size: 16px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      }
 
-<body>
-	<div class="container">
-		<div class="row">
-			<div class="col-md-6 m-auto">
-				<h1 class="my-4">Lets upload some stuff</h1>
-				<form action="/upload" method="post" enctype="multipart/form-data">
-					<div class="custom-file mb-3">
-						<input type="file" class="custom-file-input" name="file" id="file1" onchange="readSingleFile(this.files)">
-						<label class="custom-file-label" for="file1" id="file-label">Choose file</label>
-					</div>
-					<input type="submit" value="Submit" class="btn btn-primary btn-block">
-				</form>
-				<hr>
-				<% if(files) { %>
-				<% files.forEach(function(file) {%>
-				<div class="card mb-3">
-					<div class="card-header">
-						<div class="card-title">
-								<%= file.filename %>
-						</div>
-					</div>
-					<div class="card-body">
-						<% if (file.isImage) { %>
-					<img src="image/<%= file.filename %>" width="250" alt="" class="img-responsive">
-						<%} else { %>
-						<a href="image/<%= file.filename %>" download><%= file.filename %></a>
-						<% } %>
-					</div>
-					<div class="card-footer">
-						<form action="/files/del/<%= file._id %>" method="post">
-							<button type="submit" class="btn btn-danger">Remove</button>
-						</form>
-					</div>
-				</div>
-				<%}) %>
-				<% } else { %>
-				<p>No files to show</p>
-				<% } %>
-			</div>
-		</div>
-	</div>
+      label,
+      progress {
+        width: 100%;
+      }
 
-	<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
-	<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
-	<script>
-		function readSingleFile(e) {
-			const name = e[0].name;
-			document.getElementById("file-label").textContent = name;
-		}
-	</script>
-</body>
+      .container {
+        max-width: 400px;
+        left: 0;
+        right: 0;
+        margin: auto;
+        padding: 0 1rem;
+        box-sizing: border-box;
+      }
 
+      .flex {
+        display: flex;
+      }
+
+      .center {
+        justify-content: center;
+      }
+
+      .column {
+        flex-direction: column;
+      }
+
+      .end {
+        justify-content: flex-end;
+      }
+
+      .btn {
+        cursor: pointer;
+        border: 0;
+        padding: 0.6rem 1.4rem;
+        background-color: unset;
+        box-shadow: 0 3px 3px -2px rgba(0, 0, 0, 0.2),
+          0 3px 4px 0 rgba(0, 0, 0, 0.14), 0 1px 8px 0 rgba(0, 0, 0, 0.12);
+      }
+
+      .btn-success {
+        color: #fff;
+        background-color: #4a89dc;
+      }
+
+      .btn-secondary {
+        color: #fff;
+        background-color: #48cfad;
+      }
+
+      .file-input {
+        position: relative;
+      }
+
+      .file-input input[type='file'] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .alert {
+        padding: 1rem;
+        border-radius: 0.3rem;
+      }
+
+      .alert-danger {
+        color: #a94442;
+        background-color: #f2838f;
+      }
+
+      .alert h1 {
+        margin: 0;
+      }
+
+      .p-2 {
+        padding: 0.4rem;
+      }
+
+      .mt-2 {
+        margin-top: 0.4rem;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .mt-3 {
+        margin-top: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Node.js simple file upload</h1>
+
+      <div class="selected-files"></div>
+
+      <form
+        class="flex column"
+        action="/upload"
+        method="POST"
+        enctype="multipart/form-data"
+      >
+        <div class="flex p-2">
+          <label class="flex center btn btn-secondary file-input">
+            <span>Choose files</span>
+            <input name="files" type="file" multiple accept="*" />
+          </label>
+        </div>
+
+        <div class="flex end p-2">
+          <button type="submit" class="btn btn-success">Upload</button>
+        </div>
+      </form>
+
+      <div class="mt-2">
+        <progress value="0" max="100">N/A</progress>
+      </div>
+
+      <div class="error-handler alert alert-danger mt-3 hidden">
+        <h1></h1>
+        <p></p>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      const $form = document.querySelector('form');
+      const $button = document.querySelector('button[type=submit]');
+      const $fileInput = document.querySelector('input[type=file]');
+      const $progressBar = document.querySelector('progress');
+      const $selectedFiles = document.querySelector('.selected-files');
+      const $errorHandler = document.querySelector('.error-handler');
+
+      const $formValue = () => {
+        const $formData = new FormData($form);
+
+        $form.querySelectorAll('input').forEach(($input) => {
+          const $name = $input.getAttribute('name');
+
+          if ($input.getAttribute('type') === 'file') {
+            const $multiple = !(null == $input.getAttribute('multiple'));
+
+            for (let i = 0; i < $input.files.length; i++) {
+              const $file = $input.files[i];
+              const $fieldName = $name + ($multiple ? '[]' : '');
+
+              $formData.append($fieldName, $file, $file.name);
+            }
+          } else {
+            $formData.append($name, $input.value);
+          }
+        });
+
+        return $formData;
+      };
+
+      const $submit = (done) => {
+        const $data = new FormData($form);
+
+        console.log([...$data.entries()]);
+
+        if (![...$data.keys()].length) {
+          return $renderError({
+            name: 'Error',
+            message: 'Nothing selected',
+          });
+        }
+
+        const $xhr = new XMLHttpRequest();
+
+        $xhr.onprogress = ($event) => {
+          $percent = ($event.loaded / $event.total) * 100;
+          $percentStr = $percent.toString();
+
+          $progressBar.setAttribute('value', $percentStr);
+          $progressBar.innerText = $percentStr + '%';
+
+          if ($percent >= 100) {
+            done();
+          }
+        };
+
+        $xhr.onerror = ($error) => {
+          $renderError($error);
+          done();
+        };
+
+        $xhr.open(
+          $form.getAttribute('method'),
+          $form.getAttribute('action')
+          //
+        );
+
+        $xhr.send($data);
+      };
+
+      const $setDisabled = ($state) => {
+        document.querySelectorAll('button, input', ($el) => {
+          if ($state) {
+            $el.setAttribute('disabled', '');
+          } else {
+            $el.removeAttribute('disabled');
+          }
+        });
+      };
+
+      const $listener = ($event) => {
+        $event.preventDefault();
+        $event.stopPropagation();
+
+        $setDisabled(true);
+        $submit(() => $setDisabled(false));
+
+        return false;
+      };
+
+      const $renderSelected = () => {
+        const $fragment = new DocumentFragment();
+        const $p = document.createElement('p');
+
+        $fragment.appendChild($p);
+
+        if (!$fileInput.files.length) {
+          const $i = document.createElement('i');
+
+          $i.innerText = 'Nothing selected';
+          $p.appendChild($i);
+        } else {
+          const $b = document.createElement('b');
+          const $i = document.createElement('i');
+
+          $b.innerText = $fileInput.files.length.toString();
+
+          if ($fileInput.files.length > 1) {
+            $i.innerText = ' files selected';
+          } else {
+            $i.innerText = ' file selected';
+          }
+
+          $p.appendChild($b);
+          $p.appendChild($i);
+
+          const $ul = document.createElement('ul');
+
+          for (let i = 0; i < $fileInput.files.length; i++) {
+            const $file = $fileInput.files[i];
+            const $li = document.createElement('li');
+            const $span = document.createElement('span');
+            const $small = document.createElement('small');
+
+            $span.innerText = $file.name;
+            $small.innerText = ' ' + $hr($file.size);
+
+            $li.appendChild($span);
+            $li.appendChild($small);
+
+            $ul.appendChild($li);
+          }
+
+          $fragment.appendChild($ul);
+          $renderError(null);
+        }
+
+        $selectedFiles.innerHTML = '';
+        $selectedFiles.appendChild($fragment);
+      };
+
+      const $hr = ($size) => {
+        if ('number' !== typeof $size) {
+          throw new TypeError('Size must be a number');
+        }
+
+        if ($size <= 0) {
+          throw new RangeError('Size must be greater than 0');
+        }
+
+        if (!Number.isInteger($size)) {
+          throw new Error('Size must be an integer');
+        }
+
+        let $i = 0;
+        const $units = ['', 'K', 'M', 'G', 'T', 'P'];
+
+        while ($size > 1e3) {
+          $i++;
+          $size /= 1e3;
+        }
+
+        return $size.toFixed('2').replace('.00', '') + $units[$i] + 'B';
+      };
+
+      const $renderError = ($error) => {
+        const [h1, p] = $errorHandler.querySelectorAll('h1, p');
+
+        if (null == $error) {
+          h1.innerText = '';
+          p.innerText = '';
+
+          $errorHandler.classList.remove('hidden');
+        } else {
+          h1.innerText = $error.name;
+          p.innerText = $error.message;
+
+          $errorHandler.classList.add('hidden');
+        }
+
+        $errorHandler.classList.toggle('hidden');
+      };
+
+      $form.addEventListener('submit', $listener, false);
+      $button.addEventListener('click', $listener, false);
+      $fileInput.addEventListener('change', $renderSelected);
+
+      $renderSelected();
+    </script>
+  </body>
 </html>
